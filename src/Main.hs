@@ -9,6 +9,7 @@ import Data.IORef
 import System.Environment
 import System.IO
 import Network.Socket
+import Data.List.Split
 
 main :: IO ()
 main = do
@@ -36,9 +37,9 @@ main = do
     [] -> putStrLn "I have no neighbours :("
     neighbours -> do
       clients <- createClients neighbours
-      putStrLn $ show $ length clients
-
-      closeCLients clients
+      _       <- forkIO listenForCommandLine
+      return ()
+      -- closeCLients clients
       -- client <- connectSocket neighbour
       -- chandle <- socketToHandle client ReadWriteMode
       -- Send a message over the socket
@@ -105,6 +106,23 @@ listenForConnections serverSocket = do
   _               <- forkIO $ handleConnection connection
   listenForConnections serverSocket
 
+parseCommand :: String -> (Command, String)
+parseCommand s = case head of 
+  "show" -> (Show, concat rest)
+  "send" -> (Send, concat rest)
+  "make" -> (Make, concat rest)
+  "disc" -> (Disconnect, concat rest)
+  _      -> (Unknown, concat rest)
+  where (head:rest) = splitOn ";" s
+
+listenForCommandLine :: IO ()
+listenForCommandLine = do line <- getLine
+                          handleCommandLine $ parseCommand line
+                          listenForCommandLine
+
+handleCommandLine :: (Command,String) -> IO ()
+handleCommandLine (c,s) = putStrLn $ (show c) ++ " " ++ s
+ 
 handleConnection :: Socket -> IO ()
 handleConnection connection = do
   putStrLn "Got new incomming connection"
@@ -115,6 +133,7 @@ handleConnection connection = do
   hClose chandle
 
 -- Routing table data types
+data Command = Show | Send | Make | Disconnect | Unknown deriving Show
 data Port = Port Int | Local
 data Entry = Entry Port Int Port
 data RoutingTable = Table [TMVar Entry]
