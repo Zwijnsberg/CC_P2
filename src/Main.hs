@@ -118,3 +118,15 @@ handleConnection connection = do
 data Port = Port Int | Local
 data Entry = Entry Port Int Port
 data RoutingTable = Table [TMVar Entry]
+
+
+addEntry :: Table -> Entry -> Table
+addEntry t e = t : e 
+
+updateTable :: Table -> Entry -> Table
+updateTable (t:tx) e = update t e : result tx
+                     
+update :: Event -> Event -> Event
+update e@(Entry p d pp) e2@(Entry p2 _ _) | p == p2  = e2
+                                          | otherwise = e 
+
