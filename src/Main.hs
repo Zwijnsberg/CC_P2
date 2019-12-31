@@ -11,6 +11,9 @@ import System.IO
 import Network.Socket
 import Data.List.Split
 
+import Models
+import RoutingTable
+
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
@@ -29,7 +32,11 @@ main = do
   bind serverSocket $ portToAddress me
   listen serverSocket 1024
   -- Let a seperate thread listen for incomming connections
-  _ <- forkIO $ listenForConnections serverSocket
+
+  -- create empty table
+  table <- newIORef $ Table []
+
+  _ <- forkIO $ listenForConnections table serverSocket
 
   -- As an example, connect to the first neighbour. This just
   -- serves as an example on using the network functions in Haskell
@@ -37,46 +44,34 @@ main = do
     [] -> putStrLn "I have no neighbours :("
     neighbours -> do
       clients <- createClients neighbours
-      _       <- forkIO listenForCommandLine
+
+      -- create table and update 
+      table'   <- initTable me clients
+      writeIORef table table'
+      sendInitTable me clients
+
+      _       <- forkIO $ listenForCommandLine table
+
       return ()
-      -- closeCLients clients
-      -- client <- connectSocket neighbour
-      -- chandle <- socketToHandle client ReadWriteMode
-      -- Send a message over the socket
-      -- You can send and receive messages with a similar API as reading and writing to the console.
-      -- Use `hPutStrLn chandle` instead of `putStrLn`,
-      -- and `hGetLine  chandle` instead of `getLine`.
-      -- You can close a connection with `hClose chandle`.
-      -- hPutStrLn chandle $ "Hi process " ++ show neighbour ++ "! I'm process " ++ show me ++ " and you are my first neighbour."
-      -- putStrLn "I sent a message to the neighbour"
-      -- message <- hGetLine chandle
-      -- putStrLn $ "Neighbour send a message back: " ++ show message
-      -- hClose chandle
 
   threadDelay 1000000000
 
-closeClients :: [Handle] -> IO ()
-closeCLients [] = return ()
-closeClients (x:xs) = do hClose x
-                         closeCLients xs
+sendMessage :: Client -> String -> IO ()
+sendMessage (Client _ h) s = hPutStrLn h s
 
-sendMessage :: Handle -> String -> IO ()
-sendMessage h s = hPutStrLn h s
-
-createClients :: [Int] -> IO [Handle]
+createClients :: [Int] -> IO [Client]
 createClients [] = return []
-createClients (x:xs) = do handle <- createClient x
-                          rest <- createClients xs
-                          let result = handle : rest
-                          return result
-  -- return [createClient x | x <- xs]
+createClients (x:xs) = do client <- createClient x
+                          rest   <- createClients xs
+                          return $ client : rest
 
-createClient :: Int -> IO Handle
+createClient :: Int -> IO Client
 createClient n = 
-  do putStrLn $ "Connecting to neighbour " ++ show n ++ "..."
+  do putStr $ "Connecting to neighbour " ++ show n ++ " ... "
      client <- connectSocket n
      chandle <- socketToHandle client ReadWriteMode
-     return chandle
+     putStrLn "connected"
+     return (Client n chandle)
 
 readCommandLineArguments :: IO (Int, [Int])
 readCommandLineArguments = do
@@ -100,40 +95,42 @@ connectSocket portNumber = connect'
           connect'
         Right _ -> return client
 
-listenForConnections :: Socket -> IO ()
-listenForConnections serverSocket = do
+listenForConnections :: (IORef RoutingTable) -> Socket -> IO ()
+listenForConnections t serverSocket = do
   (connection, _) <- accept serverSocket
-  _               <- forkIO $ handleConnection connection
-  listenForConnections serverSocket
+  _               <- forkIO $ handleConnection t connection
+  listenForConnections t serverSocket
 
-parseCommand :: String -> (Command, String)
-parseCommand s = case head of 
-  "show" -> (Show, concat rest)
-  "send" -> (Send, concat rest)
-  "make" -> (Make, concat rest)
-  "disc" -> (Disconnect, concat rest)
-  _      -> (Unknown, concat rest)
-  where (head:rest) = splitOn ";" s
+parseCommand :: String -> Command
+parseCommand s = case cmd of 
+  "R" -> Show
+  "B" -> Send (getPort r) (getMsg r)
+  "C" -> Make (getPort r)
+  "D" -> Disconnect (getPort r)
+  "U" -> getDist r
+  _   -> Unknown
+  where (cmd:r) = splitOn " " s
+        getPort (p:_) = read p :: Int
+        getMsg  (_:m) = concat m
+        getDist (neighbour:dist:me:_) = Distance (read neighbour :: Int) (read dist :: Int) (read me :: Int)
 
-listenForCommandLine :: IO ()
-listenForCommandLine = do line <- getLine
-                          handleCommandLine $ parseCommand line
-                          listenForCommandLine
+listenForCommandLine :: (IORef RoutingTable) -> IO ()
+listenForCommandLine t = do line <- getLine
+                            t'   <- readIORef t
+                            handleCommand t' $ parseCommand line
+                            listenForCommandLine t
 
-handleCommandLine :: (Command,String) -> IO ()
-handleCommandLine (c,s) = putStrLn $ (show c) ++ " " ++ s
- 
-handleConnection :: Socket -> IO ()
-handleConnection connection = do
-  putStrLn "Got new incomming connection"
-  chandle <- socketToHandle connection ReadWriteMode
-  hPutStrLn chandle "Welcome"
-  message <- hGetLine chandle
-  putStrLn $ "Incomming connection send a message: " ++ message
-  hClose chandle
+handleCommand :: RoutingTable -> Command -> IO ()
+handleCommand t Show = printRoutingTable t
+handleCommand t (Distance n d m) = putStrLn "updating distance"
+handleCommand t cmd = putStrLn $ "Undefined or Unspecified command entered ... " ++ (show cmd) 
 
--- Routing table data types
-data Command = Show | Send | Make | Disconnect | Unknown deriving Show
-data Port = Port Int | Local
-data Entry = Entry Port Int Port
-data RoutingTable = Table [TMVar Entry]
+handleConnection :: (IORef RoutingTable) -> Socket -> IO ()
+handleConnection t connection =
+  do chandle <- socketToHandle connection ReadWriteMode
+     handleConnection' chandle
+  where handleConnection' handle = 
+          do msg <- hGetLine handle
+             t'  <- readIORef t
+             handleCommand t' $ parseCommand msg
+             handleConnection' handle
