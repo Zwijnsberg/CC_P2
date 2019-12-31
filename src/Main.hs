@@ -1,17 +1,16 @@
 
 module Main where
 
-import Control.Monad
 import Control.Concurrent
-import Control.Concurrent.STM
 import Control.Exception
 import Data.IORef
 import System.Environment
 import System.IO
 import Network.Socket
-import Data.List.Split
 
 import Models
+import CommandHandler
+import ConnectionHandler
 import RoutingTable
 
 main :: IO ()
@@ -56,22 +55,19 @@ main = do
 
   threadDelay 1000000000
 
-sendMessage :: Client -> String -> IO ()
-sendMessage (Client _ h) s = hPutStrLn h s
-
-createClients :: [Int] -> IO [Client]
+createClients :: [Int] -> IO [Node]
 createClients [] = return []
 createClients (x:xs) = do client <- createClient x
                           rest   <- createClients xs
                           return $ client : rest
 
-createClient :: Int -> IO Client
+createClient :: Int -> IO Node
 createClient n = 
   do putStr $ "Connecting to neighbour " ++ show n ++ " ... "
      client <- connectSocket n
      chandle <- socketToHandle client ReadWriteMode
      putStrLn "connected"
-     return (Client n chandle)
+     return (Node n chandle)
 
 readCommandLineArguments :: IO (Int, [Int])
 readCommandLineArguments = do
@@ -94,43 +90,3 @@ connectSocket portNumber = connect'
           threadDelay 1000000
           connect'
         Right _ -> return client
-
-listenForConnections :: (IORef RoutingTable) -> Socket -> IO ()
-listenForConnections t serverSocket = do
-  (connection, _) <- accept serverSocket
-  _               <- forkIO $ handleConnection t connection
-  listenForConnections t serverSocket
-
-parseCommand :: String -> Command
-parseCommand s = case cmd of 
-  "R" -> Show
-  "B" -> Send (getPort r) (getMsg r)
-  "C" -> Make (getPort r)
-  "D" -> Disconnect (getPort r)
-  "U" -> getDist r
-  _   -> Unknown
-  where (cmd:r) = splitOn " " s
-        getPort (p:_) = read p :: Int
-        getMsg  (_:m) = concat m
-        getDist (neighbour:dist:me:_) = Distance (read neighbour :: Int) (read dist :: Int) (read me :: Int)
-
-listenForCommandLine :: (IORef RoutingTable) -> IO ()
-listenForCommandLine t = do line <- getLine
-                            t'   <- readIORef t
-                            handleCommand t' $ parseCommand line
-                            listenForCommandLine t
-
-handleCommand :: RoutingTable -> Command -> IO ()
-handleCommand t Show = printRoutingTable t
-handleCommand t (Distance n d m) = putStrLn "updating distance"
-handleCommand t cmd = putStrLn $ "Undefined or Unspecified command entered ... " ++ (show cmd) 
-
-handleConnection :: (IORef RoutingTable) -> Socket -> IO ()
-handleConnection t connection =
-  do chandle <- socketToHandle connection ReadWriteMode
-     handleConnection' chandle
-  where handleConnection' handle = 
-          do msg <- hGetLine handle
-             t'  <- readIORef t
-             handleCommand t' $ parseCommand msg
-             handleConnection' handle

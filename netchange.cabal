@@ -27,6 +27,8 @@ executable netchange
   other-modules:
         Models
       , RoutingTable
+      , CommandHandler
+      , ConnectionHandler
 
   ghc-options:
       -Wall
