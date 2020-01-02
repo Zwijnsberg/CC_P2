@@ -25,7 +25,10 @@ executable netchange
   -- main-is:          Solution.hs
 
   other-modules:
-      Paths_netchange
+        Models
+      , RoutingTable
+      , CommandHandler
+      , ConnectionHandler
 
   ghc-options:
       -Wall
