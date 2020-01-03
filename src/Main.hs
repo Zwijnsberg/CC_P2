@@ -13,6 +13,7 @@ import CommandHandler
 import ConnectionHandler
 import RoutingTable
 
+
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
@@ -47,46 +48,18 @@ main = do
       -- create table and update 
       table'   <- initTable me clients
       writeIORef table table'
-      sendInitTable me clients
+      --msgs <- getTheMessages table'
+      sendInitTable me clients  --msgs
 
       _       <- forkIO $ listenForCommandLine table
+      --_       <- forkIO $ listenForMessage     table
 
       return ()
 
   threadDelay 1000000000
 
-createClients :: [Int] -> IO [Node]
-createClients [] = return []
-createClients (x:xs) = do client <- createClient x
-                          rest   <- createClients xs
-                          return $ client : rest
 
-createClient :: Int -> IO Node
-createClient n = 
-  do putStr $ "Connecting to neighbour " ++ show n ++ " ... "
-     client <- connectSocket n
-     chandle <- socketToHandle client ReadWriteMode
-     putStrLn "connected"
-     return (Node n chandle)
 
-readCommandLineArguments :: IO (Int, [Int])
-readCommandLineArguments = do
-  args <- getArgs
-  case args of
-    [] -> error "Not enough arguments. You should pass the port number of the current process and a list of neighbours"
-    (me:neighbours) -> return (read me, map read neighbours)
 
-portToAddress :: Int -> SockAddr
-portToAddress portNumber = SockAddrInet (fromIntegral portNumber) (tupleToHostAddress (127, 0, 0, 1)) -- localhost
 
-connectSocket :: Int -> IO Socket
-connectSocket portNumber = connect'
-  where
-    connect' = do
-      client <- socket AF_INET Stream 0
-      result <- try $ connect client $ portToAddress portNumber
-      case result :: Either IOException () of
-        Left _ -> do
-          threadDelay 1000000
-          connect'
-        Right _ -> return client
+

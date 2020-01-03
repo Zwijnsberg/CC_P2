@@ -20,6 +20,5 @@ handleConnection t connection =
      handleConnection' chandle
   where handleConnection' handle = 
           do msg <- hGetLine handle
-             t'  <- readIORef t
-             handleCommand t' $ parseCommand msg
+             handleCommand t $ parseCommand msg
              handleConnection' handle

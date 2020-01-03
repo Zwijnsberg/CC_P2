@@ -1,7 +1,10 @@
 module CommandHandler where
 
+import System.IO
 import Data.IORef
 import Data.List.Split
+import Network.Socket
+
 
 import Models
 import RoutingTable
@@ -21,11 +24,22 @@ parseCommand s = case cmd of
 
 listenForCommandLine :: (IORef RoutingTable) -> IO ()
 listenForCommandLine t = do line <- getLine
-                            t'   <- readIORef t
-                            handleCommand t' $ parseCommand line
+                            handleCommand t $ parseCommand line
                             listenForCommandLine t
 
-handleCommand :: RoutingTable -> Command -> IO ()
-handleCommand t Show = printRoutingTable t
+handleCommand :: (IORef RoutingTable) -> Command -> IO ()
+handleCommand t Show        = do 
+                                t' <- readIORef t
+                                printRoutingTable t'
+handleCommand t (Send p m)  = undefined
+handleCommand t (Make p)    = addEntry t p                       
+
+
+{-handleCommand t (Disconnect p) = do
+                                    shutdown p ShutdownBoth
+                                    removeEntry p t -}
+                                    
 handleCommand t (Distance n d m) = putStrLn "updating distance"
 handleCommand t cmd = putStrLn $ "Undefined or Unspecified command entered ... " ++ (show cmd) 
+
+
