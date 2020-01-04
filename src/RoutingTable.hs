@@ -133,8 +133,7 @@ removeEntry t port =  shutdown p ShutdownBoth
 
 addEntry :: IORef RoutingTable -> Int -> IO ()
 addEntry t port = do
-                    node <- createClient port
-                    newEntry <- atomically $ newTMVar (Entry node 1 node)
-                    (Table e) <- readIORef t
-                    let newT = Table (e++[newEntry])
-                    writeIORef t newT
+    node <- createClient port
+    newEntry <- atomically $ newTMVar (Entry node 1 node)
+    (Table e) <- readIORef t
+    writeIORef t $ Table (e : [newEntry])

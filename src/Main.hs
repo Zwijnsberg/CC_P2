@@ -36,26 +36,23 @@ main = do
   -- create empty table
   table <- newIORef $ Table []
 
+  -- create thread to listen for connections
   _ <- forkIO $ listenForConnections table serverSocket
 
-  -- As an example, connect to the first neighbour. This just
-  -- serves as an example on using the network functions in Haskell
-  case neighbours of
-    [] -> putStrLn "I have no neighbours :("
-    neighbours -> do
-      clients <- createClients neighbours
+  -- create nodes
+  clients <- createClients neighbours
 
-      -- create table and update 
-      table'   <- initTable me clients
-      writeIORef table table'
-      --msgs <- getTheMessages table'
-      sendInitTable me clients  --msgs
+  -- create table and update 
+  table'   <- initTable me clients
+  writeIORef table table'
 
-      _       <- forkIO $ listenForCommandLine table
-      --_       <- forkIO $ listenForMessage     table
+  --msgs <- getTheMessages table'
+  sendInitTable me clients  --msgs
 
-      return ()
+  -- start thread to listen for user input
+  _ <- forkIO $ listenForCommandLine table
 
+  
   threadDelay 1000000000
 
 
