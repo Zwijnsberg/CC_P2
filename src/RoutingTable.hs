@@ -105,12 +105,25 @@ updateEdge (e:ex) newE en = do ee <- atomically $ readTMVar e
 
 removeEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 removeEntry t n port = do 
+<<<<<<< HEAD
                         nodes <- takeMVar n
                         let nodes' = filter (\(Node x _ _) -> x /= port) nodes
                         if (length nodes) -1 == length nodes'
                             then do putStrLn $ "Disconnected: " ++ show port
                             else putStrLn $ "Port " ++ (show port) ++ " is not known"
 
+=======
+    nodes <- takeMVar n
+    let nodes' = filter (\(Node x _ _) -> x /= port) nodes
+    let node   = filter (\(Node x _ _) -> x == port) nodes
+    if (length nodes) -1 == length nodes'
+        then do putStrLn $ "Disconnected: " ++ show port
+                mapM (\(Node _ h _) -> hClose h) node
+                -- remove from routing table?
+        else do putStrLn $ "Port " ++ (show port) ++ " is not known"
+                return [()]
+    putMVar n nodes'
+>>>>>>> 5b61ed3d80f8e4206f62031c1e6657e95dcff000
 
 addEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 addEntry t n port = do
@@ -127,6 +140,7 @@ addEntry t n port = do
                 nodes <- takeMVar n
                 putMVar n (node : nodes)
 
+<<<<<<< HEAD
                 -- add entry to the table
                 (Table e) <- readIORef t
                 writeIORef t $ Table (newEntry : e)
@@ -134,3 +148,8 @@ addEntry t n port = do
 
 unMaybe :: Maybe a -> a
 unMaybe (Just a) = a
+=======
+    -- add entry to the table
+    (Table e) <- readIORef t
+    writeIORef t $ Table (e ++ [newEntry])
+>>>>>>> 5b61ed3d80f8e4206f62031c1e6657e95dcff000
