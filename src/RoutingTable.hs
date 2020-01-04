@@ -137,10 +137,14 @@ removeEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 removeEntry t n port = do 
     nodes <- takeMVar n
     let nodes' = filter (\(Node x _ _) -> x /= port) nodes
+    let node   = filter (\(Node x _ _) -> x == port) nodes
     if (length nodes) -1 == length nodes'
-        then putStrLn $ "Disconnected: " ++ show port
-             -- remove from routing table?
-        else putStrLn $ "Port " ++ (show port) ++ " is not known"
+        then do putStrLn $ "Disconnected: " ++ show port
+                mapM (\(Node _ h _) -> hClose h) node
+                -- remove from routing table?
+        else do putStrLn $ "Port " ++ (show port) ++ " is not known"
+                return [()]
+    putMVar n nodes'
 
 addEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 addEntry t n port = do
@@ -159,4 +163,4 @@ addEntry t n port = do
 
     -- add entry to the table
     (Table e) <- readIORef t
-    writeIORef t $ Table (newEntry : e)
+    writeIORef t $ Table (e ++ [newEntry])
