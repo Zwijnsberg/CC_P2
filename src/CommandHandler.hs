@@ -2,6 +2,7 @@ module CommandHandler where
 
 import System.IO
 import Data.IORef
+import Control.Concurrent
 import Data.List.Split
 import Network.Socket
 
@@ -22,24 +23,18 @@ parseCommand s = case cmd of
         getMsg  (_:m) = concat m
         getDist (neighbour:dist:me:_) = Distance (read neighbour :: Int) (read dist :: Int) (read me :: Int)
 
-listenForCommandLine :: (IORef RoutingTable) -> IO ()
-listenForCommandLine t = do line <- getLine
-                            handleCommand t $ parseCommand line
-                            listenForCommandLine t
+listenForCommandLine :: IORef RoutingTable -> MVar [Node] -> IO ()
+listenForCommandLine t n = do line <- getLine
+                              handleCommand t n $ parseCommand line
+                              listenForCommandLine t n
 
-handleCommand :: (IORef RoutingTable) -> Command -> IO ()
-handleCommand t Show        = do 
-                                t' <- readIORef t
-                                printRoutingTable t'
-handleCommand t (Send p m)  = undefined
-handleCommand t (Make p)    = addEntry t p                       
-
-
-{-handleCommand t (Disconnect p) = do
-                                    shutdown p ShutdownBoth
-                                    removeEntry p t -}
-                                    
-handleCommand t (Distance n d m) = putStrLn "updating distance"
-handleCommand t cmd = putStrLn $ "Undefined or Unspecified command entered ... " ++ (show cmd) 
+handleCommand :: IORef RoutingTable -> MVar [Node] -> Command -> IO ()
+handleCommand t _ Show             = do t' <- readIORef t
+                                        printRoutingTable t'
+handleCommand t _ (Send p m)       = undefined
+handleCommand t n (Make p)         = addEntry t n p                       
+handleCommand t n (Disconnect p)   = removeEntry t n p
+handleCommand t _ (Distance n d m) = putStrLn "updating distance"
+handleCommand t _ cmd              = putStrLn $ "Undefined or Unspecified command entered ... " ++ (show cmd) 
 
 

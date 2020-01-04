@@ -35,14 +35,14 @@ main = do
 
   -- create empty table
   table <- newIORef $ Table []
-
-  -- create thread to listen for connections
-  _ <- forkIO $ listenForConnections table serverSocket
-
+  
   -- create nodes
   nodes'  <- createNodes neighbours
   clients <- newMVar $ nodes'
-  
+
+  -- create thread to listen for connections
+  _ <- forkIO $ listenForConnections table clients serverSocket
+
   -- create table and update 
   table'   <- initTable me clients
   writeIORef table table'
@@ -53,7 +53,7 @@ main = do
   putMVar clients clients'
   
   -- start thread to listen for user input
-  _ <- forkIO $ listenForCommandLine table
+  _ <- forkIO $ listenForCommandLine table clients
   
   threadDelay 1000000000
 

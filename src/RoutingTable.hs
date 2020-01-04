@@ -133,10 +133,25 @@ removeEntry t port =  shutdown p ShutdownBoth
                       --dan hier nog functies om het uit de routing table te halen
 -}
 
+removeEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
+removeEntry t n port = do 
+    nodes <- takeMVar n
+    let nodes' = filter (\(Node x _ _) -> x /= port) nodes
+    putMVar n nodes'
+    -- remove from routing table?
 
-addEntry :: IORef RoutingTable -> Int -> IO ()
-addEntry t port = do
+addEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
+addEntry t n port = do
+    -- create the node
     (node:_) <- createNodes [port]
+
+    -- create routing table entry
     newEntry <- atomically $ newTMVar (Entry node 1 node)
+
+    -- add node to node list
+    nodes <- takeMVar n
+    putMVar n (node : nodes)
+
+    -- add entry to the table
     (Table e) <- readIORef t
     writeIORef t $ Table (newEntry : e)

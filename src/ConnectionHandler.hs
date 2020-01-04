@@ -8,17 +8,17 @@ import Control.Concurrent
 import Models
 import CommandHandler
 
-listenForConnections :: (IORef RoutingTable) -> Socket -> IO ()
-listenForConnections t serverSocket = do
+listenForConnections :: (IORef RoutingTable) -> MVar [Node] -> Socket -> IO ()
+listenForConnections t n serverSocket = do
   (connection, _) <- accept serverSocket
-  _               <- forkIO $ handleConnection t connection
-  listenForConnections t serverSocket
+  _               <- forkIO $ handleConnection t n connection
+  listenForConnections t n serverSocket
 
-handleConnection :: (IORef RoutingTable) -> Socket -> IO ()
-handleConnection t connection =
+handleConnection :: (IORef RoutingTable) -> MVar [Node] -> Socket -> IO ()
+handleConnection t n connection =
   do chandle <- socketToHandle connection ReadWriteMode
      handleConnection' chandle
   where handleConnection' handle = 
           do msg <- hGetLine handle
-             handleCommand t $ parseCommand msg
+             handleCommand t n $ parseCommand msg
              handleConnection' handle
