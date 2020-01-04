@@ -140,7 +140,7 @@ removeEntry t n port = do
     if (length nodes) -1 == length nodes'
         then putStrLn $ "Disconnected: " ++ show port
              -- remove from routing table?
-        else return ()
+        else putStrLn $ "Port " ++ (show port) ++ " is not known"
 
 addEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 addEntry t n port = do
