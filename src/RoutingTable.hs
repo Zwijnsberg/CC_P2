@@ -44,119 +44,93 @@ sendInitTable me (x:xs) =
                sendInitTable me xs
         _ -> sendInitTable me xs
 
-{-
 
+                                      
 
-getTheMessages :: RoutingTable -> Messages
-getTheMessages (Table (e:ex)) = do local <- (\Entry x _ _ -> x) edge
-                                messages <- mapM (\Entry x y z -> MyDist local x y) xs
-                                sendInitTable messages
-
-
-sendInitTable :: [Message] -> [Node] -> IO ()
-sendInitTable _ []      = return ()
-sendInitTable (x:xs) = do 
-                        let nod = (Node x handle)
-                        hPutStrLn handle ("U " ++ (show me) ++ " 0 "++ (show y)) -- Update me cost neighbour
-                        sendInitTable me xs
-                        return ()
-
-listenForMessage :: (IORef RoutingTable) -> IO ()  -- this isn't right yet
-listenForMessage t = do message <- getLine 
-                        t'   <- readIORef t
-                        recompute message t' 
-
-
-
-recompute :: Message -> RoutingTable -> IO ()
-recompute m@(MyDist v d) t =  do
-                                changeTable <- newIORef False
-                                if check4Connection v t
-                                    then do
-                                        (b,e) <- checkLocal v t
-                                        if b
-                                            then do
-                                                return ()
-                                            else do
-                                                if compareDist d (unMaybe e)
-                                                    then do
-                                                    newTable <- updateDist e m t
-                                                    writeIORef changeTable True
-                                                    else do
-                                                        return ()
-                                else do 
-                                    makeNewConnection
-                                    changeTable = True
-                                c <- readIORef changeTable
-                                if c == True
-                                    sendInitTable
-                                return ()
-
-unMaybe :: Maybe a -> a
-unMaybe Just a = a
                         
 check4Connection :: Node -> RoutingTable -> IO (Bool, Maybe Entry)
-check4Connoection v (Table [])     = (False, Nothing) 
-check4Connoection v (Table (e:ex)) do
-                                     entry <- takeTMVar e
-                                     if  v == (\n _ _ -> n) entry
+check4Connection v (Table [])     = return (False, Nothing) 
+check4Connection v (Table (e:ex)) = do
+                                     entry <- atomically $ takeTMVar e
+                                     if  v == (\(Entry n _ _) -> n) entry
                                          then do 
-                                             return (True, entry) -- true means: the entry's node is an existing connection within the current routing table
+                                             return (True, Just entry) -- true means: the entry's node is an existing connection within the current routing table
                                          else do
-                                             return check4Connection v (Table ex)
+                                             res <- check4Connection v (Table ex)
+                                             return res
 
 
-checkLocal :: Node -> RoutingTable -> Bool
-check4Connoection v (Table (e:_)) | v == e    = True  -- true means: the given entry is about the local node
-                                  | otherwise = False
+checkLocal :: Node -> RoutingTable -> IO Bool
+checkLocal v (Table (e:_)) = do ex <- atomically $ readTMVar e
+                                let ee = (\(Entry n _ _) -> n) ex
+                                if v == ee
+                                    then do
+                                        return True
+                                    else do
+                                        return False
+
 
 compareDist :: Int -> Entry -> Bool
 compareDist d (Entry _ localD _) | (d+1) < localD    = True
                                  | otherwise         = False
 
-updateDist :: Entry Message -> RoutingTable -> RoutingTable
-updateDist en (MyDist s n d) (Table (e:ex) = do newEntry <- Entry n (d+1) s
-                                                local    <- e
-                                                edge     <- updateEdge ex newEntry en
-                                                let total =  local : edge
-                                                return $ Table total
 
- 
-updateEdge :: [Entry] -> Entry -> Entry -> [Entry]
-updateEdge [] newE en     = newE
-updateEdge (e:ex) newE en | e == en   = newE : ex
-                          | otherwise = e : (updateEdge ex newE en)
+{-
+updateDist :: TMVar Entry -> Node -> Node -> Int -> RoutingTable -> RoutingTable
+updateDist en n1 n2 dist t@(Table (e:ex)) = return t -}
 
-removeEntry :: IORef RoutingTable -> Int -> IO ()
-removeEntry t port =  shutdown p ShutdownBoth
-                      putStrLn "Disconnecting with " ++ show p ++ "..." 
-                      --dan hier nog functies om het uit de routing table te halen
--}
+
+updateDist :: TMVar Entry -> Node -> Node -> Int -> RoutingTable -> IO RoutingTable
+updateDist en n1 n2 dist (Table (e:ex)) = do 
+                                            q <- atomically $ newTMVar (Entry n1 (dist+1) n2)
+                                            edge <- updateEdge ex q en
+                                            let total = e : edge --first is not updated
+                                            return $ Table total 
+
+
+updateEdge :: [TMVar Entry] -> TMVar Entry -> TMVar Entry -> IO [TMVar Entry]
+updateEdge [] newE en     = return [newE]
+updateEdge (e:ex) newE en = do ee <- atomically $ readTMVar e
+                               enx <- atomically $ readTMVar en
+                               if ee == enx
+                                   then do
+                                       q <- atomically $ newTMVar (newE:ex)
+                                       qq <- atomically $ readTMVar q
+                                       return qq
+                                   else do
+                                       er <- (updateEdge ex newE en)
+                                       let erx = e:er
+                                       return erx
+
 
 removeEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 removeEntry t n port = do 
-    nodes <- takeMVar n
-    let nodes' = filter (\(Node x _ _) -> x /= port) nodes
-    if (length nodes) -1 == length nodes'
-        then putStrLn $ "Disconnected: " ++ show port
-             -- remove from routing table?
-        else putStrLn $ "Port " ++ (show port) ++ " is not known"
+                        nodes <- takeMVar n
+                        let nodes' = filter (\(Node x _ _) -> x /= port) nodes
+                        if (length nodes) -1 == length nodes'
+                            then do putStrLn $ "Disconnected: " ++ show port
+                            else putStrLn $ "Port " ++ (show port) ++ " is not known"
+
 
 addEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 addEntry t n port = do
-    -- create the node
-    (node:_) <- createNodes [port]
+                -- create the node
+                (node:_) <- createNodes [port]
 
-    -- Notify user
-    putStrLn $ "Connected: " ++ (show port)
+                -- Notify user
+                putStrLn $ "Connected: " ++ (show port)
 
-    -- create routing table entry
-    newEntry <- atomically $ newTMVar (Entry node 1 node)
+                -- create routing table entry
+                newEntry <- atomically $ newTMVar (Entry node 1 node)
 
-    -- add node to node list
-    nodes <- takeMVar n
-    putMVar n (node : nodes)
+                -- add node to node list
+                nodes <- takeMVar n
+                putMVar n (node : nodes)
 
-    -- add entry to the table
-    (Table e) <- readIORef t
-    writeIORef t $ Table (newEntry : e)
+                -- add entry to the table
+                (Table e) <- readIORef t
+                writeIORef t $ Table (newEntry : e)
+
+
+unMaybe :: Maybe a -> a
+unMaybe (Just a) = a

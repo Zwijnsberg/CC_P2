@@ -11,10 +11,12 @@ import Control.Concurrent.STM
 import System.IO
 
 data Entry = Entry Node Int Node -- dest, cost, closest neigh
+    deriving Eq
 data RoutingTable = Table [TMVar Entry]
 data Node = Node Int Handle Socket | LocalNode Int
-data Message = MyDist Node Node Int -- sender dest, cost
-data ChangeTable = TMVar Bool
+    deriving Eq
+data Message = (Int, Int, Int) -- sender, dest, cost
+--data ChangeTable = TMVar Bool
 
 data Command = Show 
              | Send Int String 
