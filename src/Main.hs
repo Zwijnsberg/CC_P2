@@ -40,18 +40,20 @@ main = do
   _ <- forkIO $ listenForConnections table serverSocket
 
   -- create nodes
-  clients <- createClients neighbours
-
+  nodes'  <- createNodes neighbours
+  clients <- newMVar $ nodes'
+  
   -- create table and update 
   table'   <- initTable me clients
   writeIORef table table'
 
   --msgs <- getTheMessages table'
-  sendInitTable me clients  --msgs
-
+  clients' <- takeMVar clients
+  sendInitTable me clients'  --msgs
+  putMVar clients clients'
+  
   -- start thread to listen for user input
   _ <- forkIO $ listenForCommandLine table
-
   
   threadDelay 1000000000
 

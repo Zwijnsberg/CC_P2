@@ -1,6 +1,7 @@
 module RoutingTable where
 
 import Control.Concurrent.STM
+import Control.Concurrent
 import System.IO
 import Data.IORef
 import Network.Socket
@@ -23,10 +24,12 @@ newEntry value c2 c1 = atomically $ newTMVar $ Entry c1 value c2
 newEntry_ :: Int -> Node -> IO (TMVar Entry)
 newEntry_ value c1 = atomically $ newTMVar $ Entry c1 value c1
 
-initTable :: Int -> [Node] -> IO RoutingTable
-initTable n xs = 
-  do local <- newEntry 0 (LocalNode n) (LocalNode n)
-     edge  <- mapM (newEntry_ 1) xs
+initTable :: Int -> MVar [Node] -> IO RoutingTable
+initTable n var = 
+  do nodes <- takeMVar var
+     local <- newEntry 0 (LocalNode n) (LocalNode n)
+     edge  <- mapM (newEntry_ 1) nodes
+     putMVar var nodes
      let total =  local : edge
      return $ Table total
 
@@ -36,7 +39,7 @@ sendInitTable :: Int -> [Node] -> IO ()
 sendInitTable _ []      = return ()
 sendInitTable me (x:xs) =  
     case x of
-        (Node y handle) -> 
+        (Node y handle _) -> 
             do hPutStrLn handle ("U " ++ (show me) ++ " 0 "++ (show y)) -- Update me cost neighbour
                sendInitTable me xs
         _ -> sendInitTable me xs
@@ -133,7 +136,7 @@ removeEntry t port =  shutdown p ShutdownBoth
 
 addEntry :: IORef RoutingTable -> Int -> IO ()
 addEntry t port = do
-    node <- createClient port
+    (node:_) <- createNodes [port]
     newEntry <- atomically $ newTMVar (Entry node 1 node)
     (Table e) <- readIORef t
-    writeIORef t $ Table (e : [newEntry])
+    writeIORef t $ Table (newEntry : e)

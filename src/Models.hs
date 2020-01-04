@@ -12,7 +12,7 @@ import System.IO
 
 data Entry = Entry Node Int Node -- dest, cost, closest neigh
 data RoutingTable = Table [TMVar Entry]
-data Node = Node Int Handle | LocalNode Int
+data Node = Node Int Handle Socket | LocalNode Int
 data Message = MyDist Node Node Int -- sender dest, cost
 data ChangeTable = TMVar Bool
 
@@ -26,7 +26,7 @@ data Command = Show
 
 instance Show Node where
   show (LocalNode x) = show x
-  show (Node x _)    = show x
+  show (Node x _ _)    = show x
 
 instance Show Entry where
   show (Entry (LocalNode x) v (LocalNode _))
@@ -34,21 +34,11 @@ instance Show Entry where
   show (Entry node1 v node2) 
     = (show node1) ++ " " ++ (show v) ++ " " ++ (show node2)
 
-
-
-createClients :: [Int] -> IO [Node]
-createClients [] = return []
-createClients (x:xs) = do client <- createClient x
-                          rest   <- createClients xs
-                          return $ client : rest
-
-createClient :: Int -> IO Node
-createClient n = 
-  do putStr $ "Connecting to neighbour " ++ show n ++ " ... "
-     client <- connectSocket n
-     chandle <- socketToHandle client ReadWriteMode
-     putStrLn "connected"
-     return (Node n chandle)
+createNodes :: [Int] -> IO [Node]
+createNodes xs = do
+  sockets <- mapM connectSocket xs
+  handles <- mapM (`socketToHandle` ReadWriteMode) sockets
+  return $ zipWith3 Node xs handles sockets
 
 readCommandLineArguments :: IO (Int, [Int])
 readCommandLineArguments = do
