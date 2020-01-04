@@ -22,10 +22,7 @@ main = do
   -- neighbours :: [Int] is a list of the port numbers of the initial neighbours
   -- During the execution, connections may be broken or constructed
   (me, neighbours) <- readCommandLineArguments
-
-  putStrLn $ "I should be listening on port " ++ show me
-  putStrLn $ "My initial neighbours are " ++ show neighbours
-
+  
   -- Listen to the specified port.
   serverSocket <- socket AF_INET Stream 0
   setSocketOption serverSocket ReuseAddr 1
@@ -38,6 +35,7 @@ main = do
   
   -- create nodes
   nodes'  <- createNodes neighbours
+  mapM (\x -> putStrLn ("Connected: " ++ (show x))) neighbours
   clients <- newMVar $ nodes'
 
   -- create thread to listen for connections

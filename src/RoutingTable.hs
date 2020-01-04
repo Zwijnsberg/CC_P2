@@ -137,13 +137,18 @@ removeEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 removeEntry t n port = do 
     nodes <- takeMVar n
     let nodes' = filter (\(Node x _ _) -> x /= port) nodes
-    putMVar n nodes'
-    -- remove from routing table?
+    if (length nodes) -1 == length nodes'
+        then putStrLn $ "Disconnected: " ++ show port
+             -- remove from routing table?
+        else return ()
 
 addEntry :: IORef RoutingTable -> MVar [Node] -> Int -> IO ()
 addEntry t n port = do
     -- create the node
     (node:_) <- createNodes [port]
+
+    -- Notify user
+    putStrLn $ "Connected: " ++ (show port)
 
     -- create routing table entry
     newEntry <- atomically $ newTMVar (Entry node 1 node)
